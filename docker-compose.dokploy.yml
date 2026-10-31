@@ -1,0 +1,139 @@
+version: "3.8"
+
+name: twenty-crm
+
+services:
+  server:
+    image: ${DOCKER_IMAGE:-ghcr.io/thewaqaspro/twenty:latest}
+    restart: always
+    mem_limit: 1536M
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      NODE_PORT: 3000
+      NODE_OPTIONS: "--max-old-space-size=1280"
+
+      SERVER_URL: ${SERVER_URL}
+      FRONT_BASE_URL: ${FRONT_BASE_URL:-https://crm.kyndstudio.com}
+      IS_MULTIWORKSPACE_ENABLED: ${IS_MULTIWORKSPACE_ENABLED:-true}
+      DEFAULT_SUBDOMAIN: ${DEFAULT_SUBDOMAIN:-crm}
+      IS_WORKSPACE_CREATION_LIMITED_TO_SERVER_ADMINS: ${IS_WORKSPACE_CREATION_LIMITED_TO_SERVER_ADMINS:-true}
+      IS_CONFIG_VARIABLES_IN_DB_ENABLED: ${IS_CONFIG_VARIABLES_IN_DB_ENABLED:-true}
+      MAX_WORKSPACES_WITHOUT_ENTERPRISE_KEY: ${MAX_WORKSPACES_WITHOUT_ENTERPRISE_KEY:-100}
+
+      APP_SECRET: ${APP_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+
+      # External Postgres & Redis at 2.25.71.201
+      PG_DATABASE_URL: ${PG_DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+
+      # S3 Object Storage (Endpoint: https://s3.kyndstudio.com)
+      STORAGE_TYPE: ${STORAGE_TYPE:-s3}
+      STORAGE_S3_NAME: ${STORAGE_S3_NAME}
+      STORAGE_S3_REGION: ${STORAGE_S3_REGION:-us-east-1}
+      STORAGE_S3_ENDPOINT: ${STORAGE_S3_ENDPOINT}
+      STORAGE_S3_ACCESS_KEY_ID: ${STORAGE_S3_ACCESS_KEY_ID}
+      STORAGE_S3_SECRET_ACCESS_KEY: ${STORAGE_S3_SECRET_ACCESS_KEY}
+      STORAGE_S3_PRESIGNED_URL_ENABLED: ${STORAGE_S3_PRESIGNED_URL_ENABLED:-true}
+      STORAGE_S3_PRESIGNED_URL_BASE: ${STORAGE_S3_PRESIGNED_URL_BASE:-https://s3.kyndstudio.com}
+
+      DISABLE_DB_MIGRATIONS: "false"
+      DISABLE_CRON_JOBS_REGISTRATION: "false"
+
+      # Transactional Email (Brevo SMTP Relay)
+      EMAIL_DRIVER: ${EMAIL_DRIVER:-smtp}
+      EMAIL_SMTP_HOST: ${EMAIL_SMTP_HOST}
+      EMAIL_SMTP_PORT: ${EMAIL_SMTP_PORT}
+      EMAIL_SMTP_USER: ${EMAIL_SMTP_USER}
+      EMAIL_SMTP_PASSWORD: ${EMAIL_SMTP_PASSWORD}
+      EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS}
+      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME}
+    volumes:
+      - twenty-server-data:/app/packages/twenty-server/.local-storage
+    networks:
+      - dokploy-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:3000/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dokploy-network"
+      - "traefik.http.routers.twenty-crm.rule=Host(`crm.kyndstudio.com`) || HostRegexp(`{subdomain:[a-z0-9-]+}.kyndstudio.com`)"
+      - "traefik.http.routers.twenty-crm.entrypoints=websecure"
+      - "traefik.http.routers.twenty-crm.tls=true"
+      - "traefik.http.routers.twenty-crm.tls.certresolver=cloudflare"
+      - "traefik.http.routers.twenty-crm.tls.domains[0].main=kyndstudio.com"
+      - "traefik.http.routers.twenty-crm.tls.domains[0].sans=*.kyndstudio.com"
+      - "traefik.http.services.twenty-crm.loadbalancer.server.port=3000"
+
+  worker:
+    image: ${DOCKER_IMAGE:-ghcr.io/thewaqaspro/twenty:latest}
+    restart: always
+    command: ["yarn", "worker:prod"]
+    mem_limit: 768M
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+    environment:
+      NODE_ENV: production
+      NODE_OPTIONS: "--max-old-space-size=512"
+
+      SERVER_URL: ${SERVER_URL}
+      FRONT_BASE_URL: ${FRONT_BASE_URL:-https://crm.kyndstudio.com}
+      IS_MULTIWORKSPACE_ENABLED: ${IS_MULTIWORKSPACE_ENABLED:-true}
+      DEFAULT_SUBDOMAIN: ${DEFAULT_SUBDOMAIN:-crm}
+      IS_WORKSPACE_CREATION_LIMITED_TO_SERVER_ADMINS: ${IS_WORKSPACE_CREATION_LIMITED_TO_SERVER_ADMINS:-true}
+      IS_CONFIG_VARIABLES_IN_DB_ENABLED: ${IS_CONFIG_VARIABLES_IN_DB_ENABLED:-true}
+      MAX_WORKSPACES_WITHOUT_ENTERPRISE_KEY: ${MAX_WORKSPACES_WITHOUT_ENTERPRISE_KEY:-100}
+
+      APP_SECRET: ${APP_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+
+      # External Postgres & Redis at 2.25.71.201
+      PG_DATABASE_URL: ${PG_DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+
+      # S3 Object Storage (Endpoint: https://s3.kyndstudio.com)
+      STORAGE_TYPE: ${STORAGE_TYPE:-s3}
+      STORAGE_S3_NAME: ${STORAGE_S3_NAME}
+      STORAGE_S3_REGION: ${STORAGE_S3_REGION:-us-east-1}
+      STORAGE_S3_ENDPOINT: ${STORAGE_S3_ENDPOINT}
+      STORAGE_S3_ACCESS_KEY_ID: ${STORAGE_S3_ACCESS_KEY_ID}
+      STORAGE_S3_SECRET_ACCESS_KEY: ${STORAGE_S3_SECRET_ACCESS_KEY}
+      STORAGE_S3_PRESIGNED_URL_ENABLED: ${STORAGE_S3_PRESIGNED_URL_ENABLED:-true}
+      STORAGE_S3_PRESIGNED_URL_BASE: ${STORAGE_S3_PRESIGNED_URL_BASE:-https://s3.kyndstudio.com}
+
+      DISABLE_DB_MIGRATIONS: "true"
+      DISABLE_CRON_JOBS_REGISTRATION: "true"
+
+      # Transactional Email (Brevo SMTP Relay)
+      EMAIL_DRIVER: ${EMAIL_DRIVER:-smtp}
+      EMAIL_SMTP_HOST: ${EMAIL_SMTP_HOST}
+      EMAIL_SMTP_PORT: ${EMAIL_SMTP_PORT}
+      EMAIL_SMTP_USER: ${EMAIL_SMTP_USER}
+      EMAIL_SMTP_PASSWORD: ${EMAIL_SMTP_PASSWORD}
+      EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS}
+      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME}
+    volumes:
+      - twenty-server-data:/app/packages/twenty-server/.local-storage
+    networks:
+      - dokploy-network
+    depends_on:
+      server:
+        condition: service_healthy
+
+networks:
+  dokploy-network:
+    external: true
+
+volumes:
+  twenty-server-data:
