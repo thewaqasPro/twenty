@@ -1,8 +1,8 @@
 # Implementation Plan: Internal Docker Networking for Databases
 
-**Date:** 2026-11-01  
-**Target:** Twenty CRM Compose Deployment on Dokploy  
-**Host:** `2.25.71.201` (VPS)  
+**Date:** 2026-11-01
+**Target:** Twenty CRM Compose Deployment on Dokploy
+**Host:** `2.25.71.201` (VPS)
 **Dokploy Network:** `dokploy-network`
 
 ---
