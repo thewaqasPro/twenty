@@ -169,18 +169,20 @@ function listWorkspaces() {
   const countRaw = psql('SELECT COUNT(*) FROM core.workspace WHERE "activationStatus" = \'ACTIVE\';');
   const count = parseInt(countRaw, 10) || 0;
   console.log(`\n======================================================`);
-  console.log(` Active Client Workspaces (${count}/${MAX_FREE_WORKSPACES} slots used)`);
+  console.log(` Active Twenty Workspaces (${count}/${MAX_FREE_WORKSPACES} slots used)`);
   console.log(`======================================================`);
   
-  const rows = psql('SELECT id || \' | \' || "displayName" || \' | \' || subdomain || \' | \' || "activationStatus" FROM core.workspace ORDER BY "createdAt" ASC;');
+  const rows = psql('SELECT id || \' | \' || "displayName" || \' | \' || subdomain || \' | \' || COALESCE("customDomain", \'\') || \' | \' || "isCustomDomainEnabled" || \' | \' || "activationStatus" FROM core.workspace ORDER BY "createdAt" ASC;');
   if (!rows) {
     console.log('No workspaces found.');
     return;
   }
   for (const row of rows.split('\n')) {
-    const [id, name, sub, status] = row.split(' | ');
-    const url = `https://${sub}.${BASE_DOMAIN}`;
-    console.log(` • [${status}] ${name.padEnd(20)} => ${url} (ID: ${id})`);
+    const [id, name, sub, customDomain, isCustomEnabled, status] = row.split(' | ');
+    const isPrimary = isCustomEnabled === 'true' && customDomain;
+    const url = isPrimary ? `https://${customDomain}` : `https://${sub}.${BASE_DOMAIN}`;
+    const tag = isPrimary ? '[PRIMARY AGENCY]' : '[CLIENT]';
+    console.log(` • ${tag.padEnd(16)} [${status}] ${name.padEnd(20)} => ${url} (ID: ${id})`);
   }
   console.log('======================================================\n');
 }
@@ -194,7 +196,7 @@ async function provisionWorkspace(name, subdomain) {
     throw new Error(`Invalid subdomain: "${subClean}". Must contain only lowercase alphanumeric characters and hyphens.`);
   }
 
-  const reserved = ['dev', 'app', 'crm', 'admin', 'api', 'n8n', 'console', 'postgres', 'redis'];
+  const reserved = ['app', 'crm', 'admin', 'api', 'n8n', 'console', 'postgres', 'redis', 'agency'];
   if (reserved.includes(subClean)) {
     throw new Error(`Subdomain "${subClean}" is reserved and cannot be assigned to a client.`);
   }
@@ -230,7 +232,7 @@ async function provisionWorkspace(name, subdomain) {
   }, keyId, privateKeyPem);
 
   const signUpRes = await graphqlRequest(
-    `https://dev.${BASE_DOMAIN}/metadata`,
+    `https://${BASE_DOMAIN}/metadata`,
     `mutation SignUpInNewWorkspace {
       signUpInNewWorkspace {
         workspace {
@@ -261,7 +263,7 @@ async function provisionWorkspace(name, subdomain) {
   }, keyId, privateKeyPem);
 
   const activateRes = await graphqlRequest(
-    `https://dev.${BASE_DOMAIN}/metadata`,
+    `https://${BASE_DOMAIN}/metadata`,
     `mutation ActivateWorkspace($data: ActivateWorkspaceInput!) {
       activateWorkspace(data: $data) {
         id
