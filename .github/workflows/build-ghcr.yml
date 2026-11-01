@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - agency-prod
+    tags:
+      - "v*"
   workflow_dispatch:
 
 permissions:
@@ -18,15 +20,20 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Resolve Lowercase Repository Owner
+      - name: Resolve Lowercase Repository Owner and App Version
         id: meta
         run: |
           OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          RAW_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || jq -r '.version' package.json)
+          CLEAN_VERSION="${RAW_VERSION#v}"
           echo "owner=${OWNER}" >> "$GITHUB_OUTPUT"
+          echo "version=${CLEAN_VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GitHub Container Registry (ghcr.io)
         uses: docker/login-action@v3
@@ -44,8 +51,10 @@ jobs:
           push: true
           build-args: |
             NODE_OPTIONS=--max-old-space-size=8192
+            APP_VERSION=${{ steps.meta.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           tags: |
             ghcr.io/${{ steps.meta.outputs.owner }}/twenty:latest
+            ghcr.io/${{ steps.meta.outputs.owner }}/twenty:v${{ steps.meta.outputs.version }}
             ghcr.io/${{ steps.meta.outputs.owner }}/twenty:${{ github.sha }}

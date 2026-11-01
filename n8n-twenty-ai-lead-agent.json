@@ -31,8 +31,17 @@
           },
           "conditions": [
             {
+              "id": "c0-auth",
+              "leftValue": "={{ !$env.TWENTY_WEBHOOK_SECRET || ($json.headers && ($json.headers['x-webhook-secret'] || $json.headers['X-Webhook-Secret']) === $env.TWENTY_WEBHOOK_SECRET) ? 'authorized' : 'unauthorized' }}",
+              "rightValue": "authorized",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
               "id": "c1",
-              "leftValue": "={{ ($json.body.record.aiFollowupStatus || $json.body.record.ai_followup_status || 'pending').toLowerCase() }}",
+              "leftValue": "={{ ($json.body?.record?.aiFollowupStatus || $json.body?.record?.ai_followup_status || 'pending').toLowerCase() }}",
               "rightValue": "completed",
               "operator": {
                 "type": "string",
@@ -41,7 +50,7 @@
             },
             {
               "id": "c2",
-              "leftValue": "={{ ($json.body.record.aiFollowupStatus || $json.body.record.ai_followup_status || 'pending').toLowerCase() }}",
+              "leftValue": "={{ ($json.body?.record?.aiFollowupStatus || $json.body?.record?.ai_followup_status || 'pending').toLowerCase() }}",
               "rightValue": "processing",
               "operator": {
                 "type": "string",
@@ -63,7 +72,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// ==============================================================================\n// Multi-Client Registry & Lead Normalization\n// ==============================================================================\nconst payload = $input.item.json.body || {};\nconst query = $input.item.json.query || {};\nconst record = payload.record || {};\n\nconst clientId = query.client_id || \"client_1\";\n\n// Multi-Client Directory (Add client workspaces here)\nconst clientRegistry = {\n  \"client_1\": {\n    clientName: \"Kynd Studio\",\n    twentyGraphqlUrl: \"http://server:3000/graphql\",\n    twentyApiKey: \"eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImI0NTRkMGE4LTYzMDEtNGYyMi1iNmExLTdjN2RiY2NiNmQxMCJ9.eyJzdWIiOiI5NDM4ZWE3Zi1hMTk0LTQyNmItODQzYi1iNmZiMWU0ODQ2YWQiLCJ0eXBlIjoiQVBJX0tFWSIsIndvcmtzcGFjZUlkIjoiOTQzOGVhN2YtYTE5NC00MjZiLTg0M2ItYjZmYjFlNDg0NmFkIiwiaWF0IjoxNzkzNTAxNDMzLCJleHAiOjQ5NDcxMDE0MzIsImp0aSI6IjI1M2JhYWEwLTNmOTYtNDU1Mi04MGU0LTU3Yzk0OWRmYmQ3YyJ9.4Y2v8Ba3QkeYPPBu0CUXH5_1Q9oW-tA8s08PzO74eZLeeaGzKa-8KakzuOutxbGGWsB3tg_o9mH-0bEqVAODSw\",\n    brandVoicePrompt: \"Warm, consultative, design-led, and highly professional.\",\n    outboundSenderEmail: \"hello@waqas.pro\",\n    outboundSenderName: \"Kynd Studio Team\"\n  },\n  \"client_2\": {\n    clientName: \"Client Two Workspace\",\n    twentyGraphqlUrl: \"http://server:3000/graphql\",\n    twentyApiKey: \"eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImI0NTRkMGE4LTYzMDEtNGYyMi1iNmExLTdjN2RiY2NiNmQxMCJ9.eyJzdWIiOiI5NDM4ZWE3Zi1hMTk0LTQyNmItODQzYi1iNmZiMWU0ODQ2YWQiLCJ0eXBlIjoiQVBJX0tFWSIsIndvcmtzcGFjZUlkIjoiOTQzOGVhN2YtYTE5NC00MjZiLTg0M2ItYjZmYjFlNDg0NmFkIiwiaWF0IjoxNzkzNTAxNDMzLCJleHAiOjQ5NDcxMDE0MzIsImp0aSI6IjI1M2JhYWEwLTNmOTYtNDU1Mi04MGU0LTU3Yzk0OWRmYmQ3YyJ9.4Y2v8Ba3QkeYPPBu0CUXH5_1Q9oW-tA8s08PzO74eZLeeaGzKa-8KakzuOutxbGGWsB3tg_o9mH-0bEqVAODSw\",\n    brandVoicePrompt: \"Energetic, fast-paced, direct, and ROI-focused.\",\n    outboundSenderEmail: \"sales@clienttwo.com\",\n    outboundSenderName: \"Client Two Sales\"\n  }\n};\n\nconst clientConfig = clientRegistry[clientId] || clientRegistry[\"client_1\"];\n\n// Normalize Lead Details\nconst firstName = record.name?.firstName || \"\";\nconst lastName = record.name?.lastName || \"\";\nconst fullName = (firstName + \" \" + lastName).trim() || \"Valued Contact\";\nconst primaryEmail = record.emails?.primaryEmail || record.email || \"\";\nconst primaryPhone = record.phones?.primaryPhoneNumber || record.phone || \"\";\nconst companyName = record.company?.name || record.companyName || \"your organization\";\nconst jobTitle = record.jobTitle || \"Decision Maker\";\nconst source = record.source || \"Website Inbound\";\n\nreturn [{\n  json: {\n    clientId,\n    clientConfig,\n    lead: {\n      id: record.id,\n      firstName,\n      lastName,\n      fullName,\n      primaryEmail,\n      primaryPhone,\n      companyName,\n      jobTitle,\n      source,\n      aiFollowupStatus: record.aiFollowupStatus || \"PENDING\"\n    }\n  }\n}];"
+        "jsCode": "// ==============================================================================\n// Multi-Client Registry & Lead Normalization\n// Secrets are loaded exclusively from environment variables ($env)\n// ==============================================================================\nconst results = [];\n\nfor (const item of $input.all()) {\n  const payload = item.json.body || {};\n  const query = item.json.query || {};\n  const record = payload.record || {};\n\n  const clientId = query.client_id || 'client_1';\n\n  // Multi-Client Directory (API keys injected via n8n environment variables)\n  const clientRegistry = {\n    client_1: {\n      clientName: 'Kynd Studio',\n      twentyGraphqlUrl: $env.TWENTY_GRAPHQL_URL_CLIENT_1 || $env.TWENTY_GRAPHQL_URL || 'http://server:3000/graphql',\n      twentyApiKey: $env.TWENTY_API_KEY_CLIENT_1 || $env.TWENTY_API_KEY || '',\n      brandVoicePrompt: 'Warm, consultative, design-led, and highly professional.',\n      outboundSenderEmail: $env.OUTBOUND_SENDER_EMAIL_CLIENT_1 || 'hello@waqas.pro',\n      outboundSenderName: $env.OUTBOUND_SENDER_NAME_CLIENT_1 || 'Kynd Studio Team'\n    },\n    client_2: {\n      clientName: 'Client Two Workspace',\n      twentyGraphqlUrl: $env.TWENTY_GRAPHQL_URL_CLIENT_2 || $env.TWENTY_GRAPHQL_URL || 'http://server:3000/graphql',\n      twentyApiKey: $env.TWENTY_API_KEY_CLIENT_2 || $env.TWENTY_API_KEY || '',\n      brandVoicePrompt: 'Energetic, fast-paced, direct, and ROI-focused.',\n      outboundSenderEmail: $env.OUTBOUND_SENDER_EMAIL_CLIENT_2 || 'sales@clienttwo.com',\n      outboundSenderName: $env.OUTBOUND_SENDER_NAME_CLIENT_2 || 'Client Two Sales'\n    }\n  };\n\n  const clientConfig = clientRegistry[clientId] || clientRegistry.client_1;\n\n  if (!clientConfig.twentyApiKey) {\n    throw new Error(`Missing Twenty CRM API key environment variable for client '${clientId}'. Set TWENTY_API_KEY_CLIENT_1 / TWENTY_API_KEY in n8n.`);\n  }\n\n  // Normalize Lead Details\n  const firstName = record.name?.firstName || '';\n  const lastName = record.name?.lastName || '';\n  const fullName = (firstName + ' ' + lastName).trim() || 'Valued Contact';\n  const primaryEmail = record.emails?.primaryEmail || record.email || '';\n  const primaryPhone = record.phones?.primaryPhoneNumber || record.phone || '';\n  const companyName = record.company?.name || record.companyName || 'your organization';\n  const jobTitle = record.jobTitle || 'Decision Maker';\n  const source = record.source || 'Website Inbound';\n\n  if (!record.id || !primaryEmail) {\n    continue;\n  }\n\n  results.push({\n    json: {\n      clientId,\n      clientConfig,\n      lead: {\n        id: record.id,\n        firstName,\n        lastName,\n        fullName,\n        primaryEmail,\n        primaryPhone,\n        companyName,\n        jobTitle,\n        source,\n        aiFollowupStatus: record.aiFollowupStatus || 'PENDING'\n      }\n    }\n  });\n}\n\nreturn results;"
       },
       "id": "3f934c00-a342-444a-b8e3-c3d86e740ef1",
       "name": "Multi-Client Router & Lead Extractor",
@@ -106,7 +115,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $('Multi-Client Router & Lead Extractor').first().json.clientConfig.twentyGraphqlUrl }}",
+        "url": "={{ $('Split In Batches (Throttler)').item.json.clientConfig.twentyGraphqlUrl }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -116,20 +125,14 @@
             },
             {
               "name": "Authorization",
-              "value": "=Bearer {{ $('Multi-Client Router & Lead Extractor').first().json.clientConfig.twentyApiKey }}"
+              "value": "=Bearer {{ $('Split In Batches (Throttler)').item.json.clientConfig.twentyApiKey }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"query\": \"mutation MarkProcessing($id: ID!, $data: PersonUpdateInput!) { updatePerson(id: $id, data: $data) { id aiFollowupStatus } }\",\n  \"variables\": {\n    \"id\": \"{{ $('Multi-Client Router & Lead Extractor').first().json.lead.id }}\",\n    \"data\": {\n      \"aiFollowupStatus\": \"PROCESSING\"\n    }\n  }\n}",
-        "options": {
-          "response": {
-            "response": {
-              "neverError": true
-            }
-          }
-        }
+        "jsonBody": "={{ JSON.stringify({\n  query: 'mutation MarkProcessing($id: ID!, $data: PersonUpdateInput!) { updatePerson(id: $id, data: $data) { id aiFollowupStatus } }',\n  variables: {\n    id: $('Split In Batches (Throttler)').item.json.lead.id,\n    data: {\n      aiFollowupStatus: 'PROCESSING'\n    }\n  }\n}) }}",
+        "options": {}
       },
       "id": "6c267f33-d675-477d-eb06-f6a19b073bc4",
       "name": "Mark Twenty Status: Processing",
@@ -142,7 +145,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Prepare AI Prompt Inputs\nconst lead = $('Multi-Client Router & Lead Extractor').first().json.lead;\nconst clientConfig = $('Multi-Client Router & Lead Extractor').first().json.clientConfig;\n\nconst systemPrompt = `You are an elite AI Sales Automation & Qualification Agent representing ${clientConfig.clientName}.\nYour tone of voice is: ${clientConfig.brandVoicePrompt}\n\nTask:\n1. Analyze lead qualification based on the available data.\n2. Assign an Intent Score from 1 to 10.\n3. Draft a concise, personalized outreach email (3-4 paragraphs max) that invites the lead to explore next steps.\n\nYou must return STRICT JSON format with keys:\n{\n  \"leadScore\": <number 1-10>,\n  \"intentCategory\": \"High\" | \"Medium\" | \"Low\",\n  \"qualificationSummary\": \"<1 sentence rationale>\",\n  \"emailSubject\": \"<compelling subject line>\",\n  \"emailBodyHtml\": \"<clean HTML email body>\",\n  \"emailBodyText\": \"<plain text email body>\"\n}`;\n\nconst userPrompt = `Lead Name: ${lead.fullName}\nEmail: ${lead.primaryEmail}\nPhone: ${lead.primaryPhone}\nCompany: ${lead.companyName}\nJob Title: ${lead.jobTitle}\nAcquisition Source: ${lead.source}`;\n\nreturn [{\n  json: {\n    lead,\n    clientConfig,\n    systemPrompt,\n    userPrompt\n  }\n}];"
+        "jsCode": "// Prepare AI Prompt Inputs using item-scoped context\nconst batchItem = $('Split In Batches (Throttler)').item.json;\nconst lead = batchItem.lead;\nconst clientConfig = batchItem.clientConfig;\n\nconst systemPrompt = `You are an elite AI Sales Automation & Qualification Agent representing ${clientConfig.clientName}.\nYour tone of voice is: ${clientConfig.brandVoicePrompt}\n\nTask:\n1. Analyze lead qualification based on the available data.\n2. Assign an Intent Score from 1 to 10.\n3. Draft a concise, personalized outreach email (3-4 paragraphs max) that invites the lead to explore next steps.\n\nYou must return STRICT JSON format with keys:\n{\n  \"leadScore\": <number 1-10>,\n  \"intentCategory\": \"High\" | \"Medium\" | \"Low\",\n  \"qualificationSummary\": \"<1 sentence rationale>\",\n  \"emailSubject\": \"<compelling subject line>\",\n  \"emailBodyHtml\": \"<clean HTML email body>\",\n  \"emailBodyText\": \"<plain text email body>\"\n}`;\n\nconst userPrompt = `Lead Name: ${lead.fullName}\nEmail: ${lead.primaryEmail}\nPhone: ${lead.primaryPhone}\nCompany: ${lead.companyName}\nJob Title: ${lead.jobTitle}\nAcquisition Source: ${lead.source}`;\n\nreturn [{\n  json: {\n    lead,\n    clientConfig,\n    systemPrompt,\n    userPrompt\n  }\n}];"
       },
       "id": "7d378a44-e786-488e-fc17-a7b20c184cd5",
       "name": "Format AI Qualification Prompt",
@@ -162,7 +165,7 @@
         "sendHeaders": true,
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"gpt-4o-mini\",\n  \"temperature\": 0.7,\n  \"response_format\": { \"type\": \"json_object\" },\n  \"messages\": [\n    { \"role\": \"system\", \"content\": {{ JSON.stringify($json.systemPrompt) }} },\n    { \"role\": \"user\", \"content\": {{ JSON.stringify($json.userPrompt) }} }\n  ]\n}",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'gpt-4o-mini',\n  temperature: 0.7,\n  response_format: { type: 'json_object' },\n  messages: [\n    { role: 'system', content: $json.systemPrompt },\n    { role: 'user', content: $json.userPrompt }\n  ]\n}) }}",
         "options": {}
       },
       "id": "8e489b55-f897-499f-ad28-b8c31d295de6",
@@ -182,7 +185,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Parse AI response and merge with lead context\nconst rawAi = $input.item.json.choices?.[0]?.message?.content || \"{}\";\nlet aiParsed = {};\ntry {\n  aiParsed = JSON.parse(rawAi);\n} catch (e) {\n  aiParsed = {\n    leadScore: 7,\n    intentCategory: \"Medium\",\n    qualificationSummary: \"Auto-qualified inbound contact\",\n    emailSubject: \"Excited to connect with \" + $('Format AI Qualification Prompt').first().json.lead.companyName,\n    emailBodyText: \"Hello \" + $('Format AI Qualification Prompt').first().json.lead.firstName + \", thank you for reaching out to us!\",\n    emailBodyHtml: \"<p>Hello \" + $('Format AI Qualification Prompt').first().json.lead.firstName + \",</p><p>Thank you for reaching out to us!</p>\"\n  };\n}\n\nconst lead = $('Format AI Qualification Prompt').first().json.lead;\nconst clientConfig = $('Format AI Qualification Prompt').first().json.clientConfig;\n\n// Generate unique UUID for note\nconst noteId = (typeof crypto !== \"undefined\" && crypto.randomUUID) ? crypto.randomUUID() : \"xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx\".replace(/[xy]/g, function(c) {\n    const r = Math.random() * 16 | 0;\n    const v = c === \"x\" ? r : (r & 0x3 | 0x8);\n    return v.toString(16);\n});\n\nreturn [{\n  json: {\n    lead,\n    clientConfig,\n    aiResult: aiParsed,\n    noteId\n  }\n}];"
+        "jsCode": "// Parse AI response and merge with current item lead context\nconst rawAi = $input.item.json.choices?.[0]?.message?.content || '{}';\nconst promptContext = $('Format AI Qualification Prompt').item.json;\nconst lead = promptContext.lead;\nconst clientConfig = promptContext.clientConfig;\n\nlet aiParsed = {};\ntry {\n  aiParsed = JSON.parse(rawAi);\n} catch (e) {\n  aiParsed = {\n    leadScore: 7,\n    intentCategory: 'Medium',\n    qualificationSummary: 'Auto-qualified inbound contact',\n    emailSubject: 'Excited to connect with ' + lead.companyName,\n    emailBodyText: 'Hello ' + (lead.firstName || lead.fullName) + ', thank you for reaching out to us!',\n    emailBodyHtml: '<p>Hello ' + (lead.firstName || lead.fullName) + ',</p><p>Thank you for reaching out to us!</p>'\n  };\n}\n\n// Generate unique UUID for note\nconst noteId = (typeof crypto !== 'undefined' && crypto.randomUUID)\n  ? crypto.randomUUID()\n  : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {\n      const r = Math.random() * 16 | 0;\n      const v = c === 'x' ? r : (r & 0x3 | 0x8);\n      return v.toString(16);\n    });\n\nreturn [{\n  json: {\n    lead,\n    clientConfig,\n    aiResult: aiParsed,\n    noteId\n  }\n}];"
       },
       "id": "9f590c66-a908-4aa0-be39-c9d42e306ef7",
       "name": "Parse AI Output & Payload Merger",
@@ -202,7 +205,7 @@
           "parameters": [
             {
               "name": "api-key",
-              "value": "={{ $env.BREVO_API_KEY || $json.clientConfig.brevoApiKey || 'YOUR_BREVO_API_KEY' }}"
+              "value": "={{ $env.BREVO_API_KEY || $json.clientConfig.brevoApiKey }}"
             },
             {
               "name": "Content-Type",
@@ -212,14 +215,8 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"sender\": {\n    \"name\": \"{{ $('Multi-Client Router & Lead Extractor').first().json.clientConfig.outboundSenderName }}\",\n    \"email\": \"{{ $('Multi-Client Router & Lead Extractor').first().json.clientConfig.outboundSenderEmail }}\"\n  },\n  \"to\": [\n    {\n      \"email\": \"{{ $('Multi-Client Router & Lead Extractor').first().json.lead.primaryEmail }}\",\n      \"name\": \"{{ $('Multi-Client Router & Lead Extractor').first().json.lead.fullName }}\"\n    }\n  ],\n  \"subject\": \"{{ $json.aiResult.emailSubject }}\",\n  \"htmlContent\": \"{{ $json.aiResult.emailBodyHtml }}\"\n}",
-        "options": {
-          "response": {
-            "response": {
-              "neverError": true
-            }
-          }
-        }
+        "jsonBody": "={{ JSON.stringify({\n  sender: {\n    name: $json.clientConfig.outboundSenderName,\n    email: $json.clientConfig.outboundSenderEmail\n  },\n  to: [\n    {\n      email: $json.lead.primaryEmail,\n      name: $json.lead.fullName\n    }\n  ],\n  subject: $json.aiResult.emailSubject,\n  htmlContent: $json.aiResult.emailBodyHtml\n}) }}",
+        "options": {}
       },
       "id": "a0601d77-ba19-4bb1-cf40-dae53f417f08",
       "name": "Send Automated Email (Brevo)",
@@ -233,7 +230,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $('Multi-Client Router & Lead Extractor').first().json.clientConfig.twentyGraphqlUrl }}",
+        "url": "={{ $('Parse AI Output & Payload Merger').item.json.clientConfig.twentyGraphqlUrl }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -243,20 +240,14 @@
             },
             {
               "name": "Authorization",
-              "value": "=Bearer {{ $('Multi-Client Router & Lead Extractor').first().json.clientConfig.twentyApiKey }}"
+              "value": "=Bearer {{ $('Parse AI Output & Payload Merger').item.json.clientConfig.twentyApiKey }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"query\": \"mutation CreateTimelineNoteWithTarget($noteData: NoteCreateInput!, $targetData: NoteTargetCreateInput!) { createNote(data: $noteData) { id } createNoteTarget(data: $targetData) { id } }\",\n  \"variables\": {\n    \"noteData\": {\n      \"id\": \"{{ $('Parse AI Output & Payload Merger').first().json.noteId }}\",\n      \"title\": \"AI Lead Outreach Sent (Score: {{ $('Parse AI Output & Payload Merger').first().json.aiResult.leadScore }}/10)\",\n      \"bodyV2\": {\n        \"markdown\": \"\ud83e\udd16 **AI Automated Qualification & Outreach**\\n\\n**Lead Score:** {{ $('Parse AI Output & Payload Merger').first().json.aiResult.leadScore }}/10 ({{ $('Parse AI Output & Payload Merger').first().json.aiResult.intentCategory }})\\n**Rationale:** {{ $('Parse AI Output & Payload Merger').first().json.aiResult.qualificationSummary }}\\n\\n**Subject:** {{ $('Parse AI Output & Payload Merger').first().json.aiResult.emailSubject }}\\n\\n**Message Sent:**\\n{{ $('Parse AI Output & Payload Merger').first().json.aiResult.emailBodyText }}\"\n      }\n    },\n    \"targetData\": {\n      \"noteId\": \"{{ $('Parse AI Output & Payload Merger').first().json.noteId }}\",\n      \"targetPersonId\": \"{{ $('Multi-Client Router & Lead Extractor').first().json.lead.id }}\"\n    }\n  }\n}",
-        "options": {
-          "response": {
-            "response": {
-              "neverError": true
-            }
-          }
-        }
+        "jsonBody": "={{ JSON.stringify({\n  query: 'mutation CreateTimelineNoteWithTarget($noteData: NoteCreateInput!, $targetData: NoteTargetCreateInput!) { createNote(data: $noteData) { id } createNoteTarget(data: $targetData) { id } }',\n  variables: {\n    noteData: {\n      id: $('Parse AI Output & Payload Merger').item.json.noteId,\n      title: `AI Lead Outreach Sent (Score: ${$('Parse AI Output & Payload Merger').item.json.aiResult.leadScore}/10)`,\n      bodyV2: {\n        markdown: `🤖 **AI Automated Qualification & Outreach**\\n\\n**Lead Score:** ${$('Parse AI Output & Payload Merger').item.json.aiResult.leadScore}/10 (${$('Parse AI Output & Payload Merger').item.json.aiResult.intentCategory})\\n**Rationale:** ${$('Parse AI Output & Payload Merger').item.json.aiResult.qualificationSummary}\\n\\n**Subject:** ${$('Parse AI Output & Payload Merger').item.json.aiResult.emailSubject}\\n\\n**Message Sent:**\\n${$('Parse AI Output & Payload Merger').item.json.aiResult.emailBodyText}`\n      }\n    },\n    targetData: {\n      noteId: $('Parse AI Output & Payload Merger').item.json.noteId,\n      targetPersonId: $('Parse AI Output & Payload Merger').item.json.lead.id\n    }\n  }\n}) }}",
+        "options": {}
       },
       "id": "b1712e88-cb20-4cc2-d051-ebf640528019",
       "name": "Create Timeline Note in Twenty",
@@ -270,7 +261,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $('Multi-Client Router & Lead Extractor').first().json.clientConfig.twentyGraphqlUrl }}",
+        "url": "={{ $('Parse AI Output & Payload Merger').item.json.clientConfig.twentyGraphqlUrl }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -280,20 +271,14 @@
             },
             {
               "name": "Authorization",
-              "value": "=Bearer {{ $('Multi-Client Router & Lead Extractor').first().json.clientConfig.twentyApiKey }}"
+              "value": "=Bearer {{ $('Parse AI Output & Payload Merger').item.json.clientConfig.twentyApiKey }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"query\": \"mutation MarkCompleted($id: ID!, $data: PersonUpdateInput!) { updatePerson(id: $id, data: $data) { id aiFollowupStatus } }\",\n  \"variables\": {\n    \"id\": \"{{ $('Multi-Client Router & Lead Extractor').first().json.lead.id }}\",\n    \"data\": {\n      \"aiFollowupStatus\": \"COMPLETED\"\n    }\n  }\n}",
-        "options": {
-          "response": {
-            "response": {
-              "neverError": true
-            }
-          }
-        }
+        "jsonBody": "={{ JSON.stringify({\n  query: 'mutation MarkCompleted($id: ID!, $data: PersonUpdateInput!) { updatePerson(id: $id, data: $data) { id aiFollowupStatus } }',\n  variables: {\n    id: $('Parse AI Output & Payload Merger').item.json.lead.id,\n    data: {\n      aiFollowupStatus: 'COMPLETED'\n    }\n  }\n}) }}",
+        "options": {}
       },
       "id": "c2823f99-dc31-4dd3-e162-fc075163912a",
       "name": "Mark Twenty Status: Completed",
@@ -359,6 +344,7 @@
     },
     "Split In Batches (Throttler)": {
       "main": [
+        [],
         [
           {
             "node": "Rate Limit Pause (1.2s)",
@@ -439,6 +425,17 @@
         [
           {
             "node": "Mark Twenty Status: Completed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Twenty Status: Completed": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches (Throttler)",
             "type": "main",
             "index": 0
           }
