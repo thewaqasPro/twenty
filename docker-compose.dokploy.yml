@@ -18,6 +18,7 @@ services:
       NODE_OPTIONS: "--max-old-space-size=1280"
 
       SERVER_URL: ${SERVER_URL}
+      FRONT_AUTO_BASE_URL: ${FRONT_AUTO_BASE_URL:-true}
       FRONT_BASE_URL: ${FRONT_BASE_URL:-https://crm.kyndstudio.com}
       IS_MULTIWORKSPACE_ENABLED: ${IS_MULTIWORKSPACE_ENABLED:-true}
       DEFAULT_SUBDOMAIN: ${DEFAULT_SUBDOMAIN:-crm}
@@ -88,6 +89,7 @@ services:
       NODE_OPTIONS: "--max-old-space-size=512"
 
       SERVER_URL: ${SERVER_URL}
+      FRONT_AUTO_BASE_URL: ${FRONT_AUTO_BASE_URL:-true}
       FRONT_BASE_URL: ${FRONT_BASE_URL:-https://crm.kyndstudio.com}
       IS_MULTIWORKSPACE_ENABLED: ${IS_MULTIWORKSPACE_ENABLED:-true}
       DEFAULT_SUBDOMAIN: ${DEFAULT_SUBDOMAIN:-crm}
