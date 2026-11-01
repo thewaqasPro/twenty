@@ -1,0 +1,453 @@
+{
+  "name": "Twenty CRM - AI Lead Follow-up Agent (Multi-Client)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-agent",
+        "options": {
+          "responseMode": "onReceived",
+          "responseData": "allEntries"
+        }
+      },
+      "id": "1e712a88-8120-4228-b9f1-a1b64e528cf9",
+      "name": "Twenty Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        300
+      ],
+      "webhookId": "lead-agent-twenty-trigger"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ ($json.body.record.aiFollowupStatus || $json.body.record.ai_followup_status || 'pending').toLowerCase() }}",
+              "rightValue": "completed",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "c2",
+              "leftValue": "={{ ($json.body.record.aiFollowupStatus || $json.body.record.ai_followup_status || 'pending').toLowerCase() }}",
+              "rightValue": "processing",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "2d823b99-9231-4339-caf2-b2c75f639df0",
+      "name": "Infinite Loop Guard",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ==============================================================================\n// Multi-Client Registry & Lead Normalization\n// ==============================================================================\nconst payload = $input.item.json.body || {};\nconst query = $input.item.json.query || {};\nconst record = payload.record || {};\n\nconst clientId = query.client_id || 'client_1';\n\n// Multi-Client Directory (Add client workspaces here)\nconst clientRegistry = {\n  'client_1': {\n    clientName: 'Kynd Studio',\n    twentyGraphqlUrl: 'http://server:3000/graphql',\n    twentyApiKey: '{{ $env.TWENTY_API_KEY }}',\n    brandVoicePrompt: 'Warm, consultative, design-led, and highly professional.',\n    outboundSenderEmail: 'hello@waqas.pro',\n    outboundSenderName: 'Kynd Studio Team'\n  },\n  'client_2': {\n    clientName: 'Client Two Workspace',\n    twentyGraphqlUrl: 'http://server:3000/graphql',\n    twentyApiKey: '{{ $env.TWENTY_API_KEY }}',\n    brandVoicePrompt: 'Energetic, fast-paced, direct, and ROI-focused.',\n    outboundSenderEmail: 'sales@clienttwo.com',\n    outboundSenderName: 'Client Two Sales'\n  }\n};\n\nconst clientConfig = clientRegistry[clientId] || clientRegistry['client_1'];\n\n// Normalize Lead Details\nconst firstName = record.name?.firstName || '';\nconst lastName = record.name?.lastName || '';\nconst fullName = (firstName + ' ' + lastName).trim() || 'Valued Contact';\nconst primaryEmail = record.emails?.primaryEmail || record.email || '';\nconst primaryPhone = record.phones?.primaryPhoneNumber || record.phone || '';\nconst companyName = record.company?.name || record.companyName || 'your organization';\nconst jobTitle = record.jobTitle || 'Decision Maker';\nconst source = record.source || 'Website Inbound';\n\nreturn [{\n  json: {\n    clientId,\n    clientConfig,\n    lead: {\n      id: record.id,\n      firstName,\n      lastName,\n      fullName,\n      primaryEmail,\n      primaryPhone,\n      companyName,\n      jobTitle,\n      source,\n      aiFollowupStatus: record.aiFollowupStatus || 'pending'\n    }\n  }\n}];"
+      },
+      "id": "3f934c00-a342-444a-b8e3-c3d86e740ef1",
+      "name": "Multi-Client Router & Lead Extractor",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "4a045d11-b453-455b-c9f4-d4e97f851fa2",
+      "name": "Split In Batches (Throttler)",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        880,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 1.2,
+        "unit": "seconds"
+      },
+      "id": "5b156e22-c564-466c-daf5-e5f08a962ab3",
+      "name": "Rate Limit Pause (1.2s)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1080,
+        280
+      ],
+      "webhookId": "wait-throttle-twenty"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.clientConfig.twentyGraphqlUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.clientConfig.twentyApiKey }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"query\": \"mutation MarkProcessing($id: ID!, $data: PersonUpdateInput!) { updatePerson(id: $id, data: $data) { id aiFollowupStatus } }\",\n  \"variables\": {\n    \"id\": \"{{ $json.lead.id }}\",\n    \"data\": {\n      \"aiFollowupStatus\": \"processing\"\n    }\n  }\n}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "6c267f33-d675-477d-eb06-f6a19b073bc4",
+      "name": "Mark Twenty Status: Processing",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1280,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare AI Prompt Inputs\nconst lead = $('Multi-Client Router & Lead Extractor').first().json.lead;\nconst clientConfig = $('Multi-Client Router & Lead Extractor').first().json.clientConfig;\n\nconst systemPrompt = `You are an elite AI Sales Automation & Qualification Agent representing ${clientConfig.clientName}.\nYour tone of voice is: ${clientConfig.brandVoicePrompt}\n\nTask:\n1. Analyze lead qualification based on the available data.\n2. Assign an Intent Score from 1 to 10.\n3. Draft a concise, personalized outreach email (3-4 paragraphs max) that invites the lead to explore next steps.\n\nYou must return STRICT JSON format with keys:\n{\n  \"leadScore\": <number 1-10>,\n  \"intentCategory\": \"High\" | \"Medium\" | \"Low\",\n  \"qualificationSummary\": \"<1 sentence rationale>\",\n  \"emailSubject\": \"<compelling subject line>\",\n  \"emailBodyHtml\": \"<clean HTML email body>\",\n  \"emailBodyText\": \"<plain text email body>\"\n}`;\n\nconst userPrompt = `Lead Name: ${lead.fullName}\nEmail: ${lead.primaryEmail}\nPhone: ${lead.primaryPhone}\nCompany: ${lead.companyName}\nJob Title: ${lead.jobTitle}\nAcquisition Source: ${lead.source}`;\n\nreturn [{\n  json: {\n    lead,\n    clientConfig,\n    systemPrompt,\n    userPrompt\n  }\n}];"
+      },
+      "id": "7d378a44-e786-488e-fc17-a7b20c184cd5",
+      "name": "Format AI Qualification Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4o-mini\",\n  \"temperature\": 0.7,\n  \"response_format\": { \"type\": \"json_object\" },\n  \"messages\": [\n    { \"role\": \"system\", \"content\": {{ JSON.stringify($json.systemPrompt) }} },\n    { \"role\": \"user\", \"content\": {{ JSON.stringify($json.userPrompt) }} }\n  ]\n}",
+        "options": {}
+      },
+      "id": "8e489b55-f897-499f-ad28-b8c31d295de6",
+      "name": "AI Lead Qualification Agent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1720,
+        280
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "Htr0vVkUq0EZrX0i",
+          "name": "9Router"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse AI response and merge with lead context\nconst rawAi = $input.item.json.choices?.[0]?.message?.content || '{}';\nlet aiParsed = {};\ntry {\n  aiParsed = JSON.parse(rawAi);\n} catch (e) {\n  aiParsed = {\n    leadScore: 7,\n    intentCategory: 'Medium',\n    qualificationSummary: 'Auto-qualified inbound contact',\n    emailSubject: 'Excited to connect with ' + $('Format AI Qualification Prompt').first().json.lead.companyName,\n    emailBodyText: 'Hello ' + $('Format AI Qualification Prompt').first().json.lead.firstName + ', thank you for reaching out to us!',\n    emailBodyHtml: '<p>Hello ' + $('Format AI Qualification Prompt').first().json.lead.firstName + ',</p><p>Thank you for reaching out to us!</p>'\n  };\n}\n\nconst lead = $('Format AI Qualification Prompt').first().json.lead;\nconst clientConfig = $('Format AI Qualification Prompt').first().json.clientConfig;\n\nreturn [{\n  json: {\n    lead,\n    clientConfig,\n    aiResult: aiParsed\n  }\n}];"
+      },
+      "id": "9f590c66-a908-4aa0-be39-c9d42e306ef7",
+      "name": "Parse AI Output & Payload Merger",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1940,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.brevo.com/v3/smtp/email",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api-key",
+              "value": "={{ $env.BREVO_API_KEY || $json.clientConfig.brevoApiKey || 'YOUR_BREVO_API_KEY' }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"sender\": {\n    \"name\": \"{{ $json.clientConfig.outboundSenderName }}\",\n    \"email\": \"{{ $json.clientConfig.outboundSenderEmail }}\"\n  },\n  \"to\": [\n    {\n      \"email\": \"{{ $json.lead.primaryEmail }}\",\n      \"name\": \"{{ $json.lead.fullName }}\"\n    }\n  ],\n  \"subject\": \"{{ $json.aiResult.emailSubject }}\",\n  \"htmlContent\": \"{{ $json.aiResult.emailBodyHtml }}\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "a0601d77-ba19-4bb1-cf40-dae53f417f08",
+      "name": "Send Automated Email (Brevo)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2160,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.clientConfig.twentyGraphqlUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.clientConfig.twentyApiKey }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"query\": \"mutation CreateTimelineNote($data: NoteCreateInput!) { createNote(data: $data) { id } }\",\n  \"variables\": {\n    \"data\": {\n      \"title\": \"AI Lead Outreach Sent (Score: {{ $json.aiResult.leadScore }}/10)\",\n      \"body\": \"🤖 **AI Automated Qualification & Outreach**\\n\\n**Lead Score:** {{ $json.aiResult.leadScore }}/10 ({{ $json.aiResult.intentCategory }})\\n**Rationale:** {{ $json.aiResult.qualificationSummary }}\\n\\n**Subject:** {{ $json.aiResult.emailSubject }}\\n\\n**Message Sent:**\\n{{ $json.aiResult.emailBodyText }}\",\n      \"targetPersonId\": \"{{ $json.lead.id }}\"\n    }\n  }\n}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "b1712e88-cb20-4cc2-d051-ebf640528019",
+      "name": "Create Timeline Note in Twenty",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2380,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.clientConfig.twentyGraphqlUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.clientConfig.twentyApiKey }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"query\": \"mutation MarkCompleted($id: ID!, $data: PersonUpdateInput!) { updatePerson(id: $id, data: $data) { id aiFollowupStatus } }\",\n  \"variables\": {\n    \"id\": \"{{ $json.lead.id }}\",\n    \"data\": {\n      \"aiFollowupStatus\": \"completed\"\n    }\n  }\n}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "c2823f99-dc31-4dd3-e162-fc075163912a",
+      "name": "Mark Twenty Status: Completed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2600,
+        280
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "d3934000-ed42-4ee4-f273-0d186274023b",
+      "name": "Terminate (Loop Guard Activated)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        660,
+        480
+      ]
+    }
+  ],
+  "connections": {
+    "Twenty Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Infinite Loop Guard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Infinite Loop Guard": {
+      "main": [
+        [
+          {
+            "node": "Multi-Client Router & Lead Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Terminate (Loop Guard Activated)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Multi-Client Router & Lead Extractor": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches (Throttler)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches (Throttler)": {
+      "main": [
+        [
+          {
+            "node": "Rate Limit Pause (1.2s)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rate Limit Pause (1.2s)": {
+      "main": [
+        [
+          {
+            "node": "Mark Twenty Status: Processing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Twenty Status: Processing": {
+      "main": [
+        [
+          {
+            "node": "Format AI Qualification Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format AI Qualification Prompt": {
+      "main": [
+        [
+          {
+            "node": "AI Lead Qualification Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Lead Qualification Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Output & Payload Merger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Output & Payload Merger": {
+      "main": [
+        [
+          {
+            "node": "Send Automated Email (Brevo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Automated Email (Brevo)": {
+      "main": [
+        [
+          {
+            "node": "Create Timeline Note in Twenty",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Timeline Note in Twenty": {
+      "main": [
+        [
+          {
+            "node": "Mark Twenty Status: Completed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
