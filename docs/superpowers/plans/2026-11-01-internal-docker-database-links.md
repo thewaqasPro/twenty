@@ -48,8 +48,8 @@ Migrate Twenty CRM's `server` and `worker` containers from routing database and 
 ### Step 1: Local Configuration Update
 - Update [`.env.production`](file:///Users/waqas/DEV/CRM/.env.production):
   ```bash
-  PG_DATABASE_URL=postgresql://postgres:ES769OdRpxNDXjcITlOQ@database-postgresql-adg7lr:5432/kynd_crm
-  REDIS_URL=redis://default:TIAxC9YkUFv6ZDvPNgch@databases-redis-brbfnm:6379/3
+  PG_DATABASE_URL=postgresql://postgres:<PG_PASSWORD>@database-postgresql-adg7lr:5432/kynd_crm
+  REDIS_URL=redis://default:<REDIS_PASSWORD>@databases-redis-brbfnm:6379/3
   ```
 - Keep passwords and credentials identical so existing schema, tables, and Redis keys are preserved without data migration.
 

@@ -153,3 +153,26 @@ The script `scripts/upgrade-twenty-fork.sh` automates the monthly upstream rebas
 3. **Branch Sync & Rebase**: Checks out `agency-prod` and rebases our soft-fork commits cleanly on top of the target upstream tag (`git rebase <tag>`).
 4. **Automated Conflict Guard**: If any upstream code conflicts arise, halts execution and presents resolution steps (`git rebase --continue` / `git rebase --abort`).
 5. **GHCR Trigger**: Pushes `agency-prod` to origin using `--force-with-lease`, triggering the GitHub Actions GHCR Docker build workflow (`.github/workflows/build-ghcr.yml`).
+
+---
+
+## 8. Client Workspace Provisioning & Management (`scripts/create-client-workspace.sh`)
+
+To provide isolated workspaces for up to 5 clients under exact, memorable subdomains (e.g. `client1.crm.kyndstudio.com`), use the automated provisioning tool:
+
+```bash
+./scripts/create-client-workspace.sh --name "Client 2" --subdomain "client2"
+```
+
+### Key Operations & Capabilities
+1. **Multi-Workspace Isolation**:
+   - Each workspace gets its own PostgreSQL schema (`workspace_<id>`) containing isolated People, Companies, Opportunities, Tasks, Notes, and Custom Fields.
+   - The primary agency workspace is located at `https://dev.crm.kyndstudio.com` (`KYND Studio`).
+   - Client workspaces are accessible at `https://<subdomain>.crm.kyndstudio.com`.
+2. **Automated Domain & SSL Provisioning**:
+   - The script connects to the Dokploy API (`POST /api/domain.create`) and registers the new domain under Traefik with `letsencrypt` SSL certificates.
+   - Dokploy automatically triggers a compose deployment to attach the Traefik router to the `server` container.
+3. **Workspace Quota & Slot Tracking**:
+   - Run `./scripts/create-client-workspace.sh --list` to view all active workspaces, their URLs, database IDs, and current slot usage (e.g. `2/5 slots used`).
+   - Subdomain collisions and reserved subdomains (`dev`, `app`, `crm`, `admin`, `api`, `n8n`) are blocked with actionable error messages.
+
