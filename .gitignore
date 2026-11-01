@@ -2,6 +2,11 @@
 **/**/.env.*
 !**/**/.env.example
 !**/**/.env*.example
+
+# Dokploy & Deployment Secrets (Local Only)
+.env.dokploy
+.dokploy.env
+.env.production
 .DS_Store
 /.idea
 .claude/
