@@ -43,7 +43,7 @@ const DOKPLOY_URL = dokployEnv.DOKPLOY_URL || 'https://console.kyndstudio.com';
 const DOKPLOY_API_KEY = dokployEnv.DOKPLOY_API_KEY;
 const COMPOSE_ID = dokployEnv.DOKPLOY_COMPOSE_ID || 'C2yGJCMsac398s_cfwmEb';
 const BASE_DOMAIN = 'crm.kyndstudio.com';
-const MAX_FREE_WORKSPACES = 5;
+const MAX_WORKSPACES = parseInt(prodEnv.MAX_WORKSPACES_WITHOUT_ENTERPRISE_KEY || '100', 10);
 
 let pgUrl = prodEnv.PG_DATABASE_URL || '';
 if (pgUrl.includes('@database-postgresql-adg7lr:')) {
@@ -169,7 +169,7 @@ function listWorkspaces() {
   const countRaw = psql('SELECT COUNT(*) FROM core.workspace WHERE "activationStatus" = \'ACTIVE\';');
   const count = parseInt(countRaw, 10) || 0;
   console.log(`\n======================================================`);
-  console.log(` Active Twenty Workspaces (${count}/${MAX_FREE_WORKSPACES} slots used)`);
+  console.log(` Active Twenty Workspaces (${count}/${MAX_WORKSPACES} slots used)`);
   console.log(`======================================================`);
   
   const rows = psql('SELECT id || \' | \' || "displayName" || \' | \' || subdomain || \' | \' || COALESCE("customDomain", \'\') || \' | \' || "isCustomDomainEnabled" || \' | \' || "activationStatus" FROM core.workspace ORDER BY "createdAt" ASC;');
@@ -209,8 +209,8 @@ async function provisionWorkspace(name, subdomain) {
 
   const activeCountRaw = psql('SELECT COUNT(*) FROM core.workspace WHERE "activationStatus" = \'ACTIVE\';');
   const activeCount = parseInt(activeCountRaw, 10) || 0;
-  if (activeCount >= MAX_FREE_WORKSPACES) {
-    throw new Error(`Workspace limit reached: ${activeCount}/${MAX_FREE_WORKSPACES} active workspaces. Upgrade or remove unused workspaces.`);
+  if (activeCount >= MAX_WORKSPACES) {
+    throw new Error(`Workspace limit reached: ${activeCount}/${MAX_WORKSPACES} active workspaces. Upgrade or remove unused workspaces.`);
   }
 
   // 3. Resolve Admin User & Signing Key
